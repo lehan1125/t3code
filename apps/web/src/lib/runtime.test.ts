@@ -69,9 +69,8 @@ describe("web runtime relay telemetry policy", () => {
     vi.stubEnv("T3CODE_TELEMETRY_ENABLED", "false");
     vi.stubEnv("T3CODE_OTEL_SDK_DISABLED", "true");
     vi.stubEnv("OTEL_SDK_DISABLED", "true");
-    vi.stubEnv("VITE_RELAY_OTLP_TRACES_URL", "https://telemetry.example.test/v1/traces");
-    vi.stubEnv("VITE_RELAY_OTLP_TRACES_DATASET", "relay-test");
-    vi.stubEnv("VITE_RELAY_OTLP_TRACES_TOKEN", "test-token");
+    vi.stubEnv("VITE_T3CODE_TELEMETRY_URL", "https://telemetry.example.test");
+    vi.stubEnv("VITE_T3CODE_TELEMETRY_OTLP_TOKEN", "test-token");
     vi.stubEnv("VITE_HOSTED_APP_URL", "https://app.example.test");
     vi.stubGlobal("window", {
       desktopBridge,

@@ -31,9 +31,9 @@ const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const decodeJson = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 
 const destinations = {
-  traces: { url: "https://axiom.test/v1/traces", dataset: "mobile-traces" },
-  logs: { url: "https://axiom.test/v1/logs", dataset: "mobile-logs" },
-  metrics: { url: "https://axiom.test/v1/metrics", dataset: "mobile-metrics" },
+  traces: { url: "https://telemetry.test/v1/traces" },
+  logs: { url: "https://telemetry.test/v1/logs" },
+  metrics: { url: "https://telemetry.test/v1/metrics" },
 } as const;
 
 /** Maps generated column 12 of the one-line bundle to `src/App.tsx` 1:2. */
@@ -41,6 +41,7 @@ const SOURCE_MAP = encodeJson({ version: 3, sources: ["src/App.tsx"], mappings: 
 const STACK = "Error: x\n    at render (address at index.android.bundle:1:12)";
 
 interface Harness {
+  readonly collector?: false;
   readonly execute?: (
     request: HttpClientRequest.HttpClientRequest,
   ) => Effect.Effect<HttpClientResponse.HttpClientResponse, HttpClientError.HttpClientError>;
@@ -62,10 +63,12 @@ const makeHarness = (options: Harness = {}) => {
   const layerTelemetry = MobileTelemetry.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
-        Layer.succeed(MobileTelemetry.MobileTelemetrySettings, {
-          axiomToken: Redacted.make("axiom-ingest-token"),
-          destinations,
-        }),
+        Layer.succeed(
+          MobileTelemetry.MobileTelemetrySettings,
+          options.collector === false
+            ? {}
+            : { collector: { otlpToken: Redacted.make("collector-write-token"), destinations } },
+        ),
         Layer.succeed(MobileTelemetry.MobileTelemetryRateLimiter, {
           allow: () => Effect.succeed(true),
         }),
@@ -164,7 +167,7 @@ const forwardedExceptions = (request: HttpClientRequest.HttpClientRequest) => {
 };
 
 describe("MobileTelemetry", () => {
-  it.effect("forwards each signal to its Axiom dataset with the relay's token", () =>
+  it.effect("forwards each signal to the collector with bearer authentication", () =>
     Effect.gen(function* () {
       const harness = makeHarness();
       const body = encodeJson({ resourceMetrics: [] });
@@ -176,21 +179,31 @@ describe("MobileTelemetry", () => {
         harness.sent.map((request) => ({
           url: request.url,
           authorization: request.headers.authorization,
-          dataset: request.headers["x-axiom-dataset"],
           body: sentText(request),
         })),
       ).toEqual(
         (["metrics", "traces", "logs"] as const).map((signal) => ({
           url: destinations[signal].url,
-          authorization: "Bearer axiom-ingest-token",
-          dataset: destinations[signal].dataset,
+          authorization: "Bearer collector-write-token",
           body,
         })),
       );
     }),
   );
 
-  it.effect("passes Axiom's status and Retry-After back for Observe's retries", () =>
+  it.effect("returns 503 when no collector is configured", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({ collector: false });
+      const response = yield* harness.send(ingest("logs", "{}"));
+      expect(response.status).toBe(503);
+      expect(yield* Effect.promise(() => HttpServerResponse.toWeb(response).text())).toContain(
+        "collector_unconfigured",
+      );
+      expect(harness.sent).toHaveLength(0);
+    }),
+  );
+
+  it.effect("passes upstream status and Retry-After back for Observe's retries", () =>
     Effect.gen(function* () {
       const harness = makeHarness({
         execute: (request) =>

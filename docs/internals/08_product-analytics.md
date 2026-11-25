@@ -42,5 +42,7 @@ an authenticated connection does not count as product use.
 - Delivery ([`AnalyticsService.ts`](../../apps/server/src/telemetry/AnalyticsService.ts)) attaches a
   UUID per event, backs off on failure, and drops batches after bounded retries so a stuck batch
   cannot loop forever.
+- The fork uses an explicitly configured collector. The installation's private analytics key
+  belongs in the environment server's runtime. See the [setup guide](../operations/self-hosted-telemetry.md).
 - Dev-runner servers and CI smoke tests disable telemetry (and relay tracing) by default so they do
   not inflate install counts; set `T3CODE_TELEMETRY_ENABLED=true` to test locally.

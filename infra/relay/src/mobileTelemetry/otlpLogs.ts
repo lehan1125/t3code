@@ -110,7 +110,7 @@ export type SourceMapMiss =
 
 /**
  * Rewrites one exception's stack, growing it by at most `maxGrowth`, and
- * records the outcome on the record so a stack still minified in Axiom
+ * records the outcome on the record so a stack still minified in the collector
  * explains itself.
  */
 export function applySymbolication(

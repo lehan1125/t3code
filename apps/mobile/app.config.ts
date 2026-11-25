@@ -1,4 +1,5 @@
 import type { ExpoConfig } from "expo/config";
+import { telemetryEndpoint } from "@t3tools/shared/telemetryEndpoint";
 
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
@@ -18,12 +19,15 @@ const runtimeVersionPolicy =
 
 const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
+const EAS_PROJECT_ID_PATTERN = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
-// Compiled into the native project. Without a relay, Observe's native side could dispatch to
-// Expo's own ingest before observe.ts turns it off; `.invalid` never resolves (RFC 6761).
-const observeEndpointUrl = repoEnv.T3CODE_RELAY_URL?.trim()
-  ? new URL("/v1/mobile/observe", repoEnv.T3CODE_RELAY_URL.trim()).toString()
-  : "https://observe.invalid";
+// Expo Observe needs a non-Expo endpoint even when collection is not configured.
+const telemetryUrl = repoEnv.T3CODE_TELEMETRY_URL;
+const observeEndpointUrl =
+  telemetryEndpoint(telemetryUrl, "/v1/mobile/observe") ?? "https://observe.invalid";
+const explicitEasProjectId = repoEnv.T3CODE_MOBILE_EAS_PROJECT_ID?.trim() || undefined;
+const easProjectId = explicitEasProjectId ?? "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
+const easOwner = repoEnv.T3CODE_MOBILE_EAS_OWNER?.trim() || "pingdotgg";
 
 const fromRepoRoot = (relativePath: string) => `../../${relativePath}`;
 const androidAdaptiveForeground = "./assets/android-icon-foreground.png";
@@ -36,6 +40,10 @@ if (
   throw new Error(
     "T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID must be a reverse-DNS identifier such as com.example.t3code when T3CODE_IOS_PERSONAL_TEAM=1.",
   );
+}
+
+if (!EAS_PROJECT_ID_PATTERN.test(easProjectId)) {
+  throw new Error("T3CODE_MOBILE_EAS_PROJECT_ID must be a UUID.");
 }
 
 const DEVELOPMENT_ASSETS = {
@@ -246,8 +254,8 @@ const config: ExpoConfig = {
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
   updates: {
-    enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+    enabled: Boolean(explicitEasProjectId) && repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
+    url: `https://u.expo.dev/${easProjectId}`,
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },
@@ -484,17 +492,16 @@ const config: ExpoConfig = {
     EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID: repoEnv.EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID,
     EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID: repoEnv.EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID,
     EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME: repoEnv.EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME,
-    observability: {
-      tracesUrl: repoEnv.EXPO_PUBLIC_OTLP_TRACES_URL ?? "https://api.axiom.co/v1/traces",
-      tracesDataset: repoEnv.EXPO_PUBLIC_OTLP_TRACES_DATASET ?? null,
-      tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
+    telemetry: {
+      url: telemetryUrl ?? null,
+      otlpToken: repoEnv.T3CODE_TELEMETRY_OTLP_TOKEN ?? null,
     },
     eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
-      observe: { endpointUrl: observeEndpointUrl },
+      projectId: easProjectId,
+      observe: { endpointUrl: observeEndpointUrl, collectEnabled: Boolean(telemetryUrl) },
     },
   },
-  owner: "pingdotgg",
+  owner: easOwner,
   experiments: {
     // Metro only runs babel-plugin-react-compiler when this is set; see src/reactCompilerCoverage.test.ts.
     reactCompiler: true,

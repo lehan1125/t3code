@@ -123,6 +123,9 @@ const LOGIN_SHELL_ENV_NAMES = [
   "SSL_CERT_DIR",
   "NODE_EXTRA_CA_CERTS",
   "T3CODE_TELEMETRY_ENABLED",
+  "T3CODE_TELEMETRY_URL",
+  "T3CODE_TELEMETRY_ANALYTICS_KEY",
+  "T3CODE_TELEMETRY_OTLP_TOKEN",
   "T3CODE_FEATURE_FLAGS",
   "T3CODE_RELEASE_BASE_URL",
   "__MISE_DIFF",
@@ -134,6 +137,15 @@ const WINDOWS_PROFILE_ENV_NAMES = [
   "FNM_DIR",
   "FNM_MULTISHELL_PATH",
   "T3CODE_TELEMETRY_ENABLED",
+  "T3CODE_TELEMETRY_URL",
+  "T3CODE_TELEMETRY_ANALYTICS_KEY",
+  "T3CODE_TELEMETRY_OTLP_TOKEN",
+] as const;
+const WINDOWS_TELEMETRY_ENV_NAMES = [
+  "T3CODE_TELEMETRY_ENABLED",
+  "T3CODE_TELEMETRY_URL",
+  "T3CODE_TELEMETRY_ANALYTICS_KEY",
+  "T3CODE_TELEMETRY_OTLP_TOKEN",
 ] as const;
 const LOCALE_ENV_NAMES = ["LANG", "LC_ALL", "LC_CTYPE"] as const;
 const ANDROID_SDK_ENV_NAMES = ["ANDROID_HOME", "ANDROID_SDK_ROOT"] as const;
@@ -459,8 +471,8 @@ const installWindowsEnvironment = Effect.fn("desktop.shellEnvironment.installWin
     if (!config.env.FNM_MULTISHELL_PATH && profile.FNM_MULTISHELL_PATH) {
       config.env.FNM_MULTISHELL_PATH = profile.FNM_MULTISHELL_PATH;
     }
-    if (!config.env.T3CODE_TELEMETRY_ENABLED && profile.T3CODE_TELEMETRY_ENABLED) {
-      config.env.T3CODE_TELEMETRY_ENABLED = profile.T3CODE_TELEMETRY_ENABLED;
+    for (const name of WINDOWS_TELEMETRY_ENV_NAMES) {
+      if (!config.env[name] && profile[name]) config.env[name] = profile[name];
     }
     return Boolean(noProfile.PATH && profile.PATH);
   },
@@ -562,6 +574,9 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
       "JAVA_HOME",
       "PNPM_HOME",
       "T3CODE_TELEMETRY_ENABLED",
+      "T3CODE_TELEMETRY_URL",
+      "T3CODE_TELEMETRY_ANALYTICS_KEY",
+      "T3CODE_TELEMETRY_OTLP_TOKEN",
       "T3CODE_FEATURE_FLAGS",
       "T3CODE_RELEASE_BASE_URL",
     ] as const) {
@@ -669,6 +684,8 @@ const CACHED_ENV_NAMES = [
   "SSL_CERT_DIR",
   "NODE_EXTRA_CA_CERTS",
   "T3CODE_TELEMETRY_ENABLED",
+  "T3CODE_TELEMETRY_URL",
+  "T3CODE_TELEMETRY_OTLP_TOKEN",
   // The server reads its flags once at start, before discovery can finish.
   "T3CODE_FEATURE_FLAGS",
 ] as const;

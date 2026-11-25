@@ -57,9 +57,8 @@ it.effect("derives direct Clerk OAuth endpoints from statically injected public 
 
 it("product opt-out disables relay tracing with either built-in or runtime credentials", () => {
   const fallback = {
-    tracesUrl: "https://embedded.example.test/v1/traces",
-    tracesDataset: "embedded-dataset",
-    tracesToken: "embedded-token",
+    url: "https://embedded.example.test",
+    token: "embedded-token",
   };
   const env = {
     T3CODE_TELEMETRY_ENABLED: "false",
@@ -71,12 +70,33 @@ it("product opt-out disables relay tracing with either built-in or runtime crede
     resolveRelayClientTracingConfig(
       {
         ...env,
-        T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "https://runtime.example.test/v1/traces",
-        T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "runtime-dataset",
-        T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: "runtime-token",
+        T3CODE_TELEMETRY_URL: "https://runtime.example.test",
+        T3CODE_TELEMETRY_OTLP_TOKEN: "runtime-token",
       },
       fallback,
     ),
     null,
+  );
+});
+
+it("does not mix runtime collector credentials with build credentials", () => {
+  assert.equal(
+    resolveRelayClientTracingConfig(
+      {
+        T3CODE_TELEMETRY_URL: "https://runtime.example.test",
+      },
+      { url: "https://built.example.test", token: "built-token" },
+    ),
+    null,
+  );
+  assert.deepEqual(
+    resolveRelayClientTracingConfig(
+      {
+        T3CODE_TELEMETRY_URL: "https://runtime.example.test",
+        T3CODE_TELEMETRY_OTLP_TOKEN: "runtime-token",
+      },
+      { url: "https://built.example.test", token: "built-token" },
+    ),
+    { tracesUrl: "https://runtime.example.test/v1/traces", tracesToken: "runtime-token" },
   );
 });

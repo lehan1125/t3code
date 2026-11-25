@@ -7,7 +7,6 @@ import { connectionTracesEnabled } from "./diagnosticsSetting";
 
 export interface TracingConfig {
   readonly tracesUrl: string;
-  readonly tracesDataset: string;
   readonly tracesToken: string;
 }
 
@@ -28,8 +27,8 @@ export function resolveTracingConfig(): TracingConfig | null {
   if (!hasTracingPublicConfig(config)) {
     return null;
   }
-  const { tracesUrl, tracesDataset, tracesToken } = config.observability;
-  return { tracesUrl, tracesDataset, tracesToken };
+  const { tracesUrl, tracesToken } = config.observability;
+  return { tracesUrl, tracesToken };
 }
 
 export function layerFromConfig(config: TracingConfig | null, resource: TracingResource) {

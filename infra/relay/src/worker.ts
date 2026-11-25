@@ -1,5 +1,4 @@
 import * as Alchemy from "alchemy";
-import * as Axiom from "@alchemy.run/axiom";
 import * as Cloudflare from "@alchemy.run/cloudflare";
 import * as Drizzle from "@alchemy.run/drizzle/Postgres";
 import * as Config from "effect/Config";
@@ -77,12 +76,19 @@ import * as HeldHooks from "./hooks/HeldHooks.ts";
 import * as HookInbox from "./hooks/HookInbox.ts";
 import * as HookInboxObject from "./hooks/HookInboxObject.ts";
 import * as MobileTelemetry from "./mobileTelemetry/MobileTelemetry.ts";
+import { resolveTelemetryConfig } from "./telemetryConfig.ts";
 
 const layerWebcrypto = Layer.mergeAll(
   Digest.layerWebCrypto,
   Mac.layerWebCrypto,
   Signature.layerWebCrypto,
 ).pipe(Layer.provideMerge(SecureRandom.layerWebCrypto));
+
+const readTelemetryConfig = Effect.gen(function* () {
+  const url = yield* Config.option(Config.String("T3CODE_TELEMETRY_URL"));
+  const token = yield* Config.option(Config.Redacted("T3CODE_TELEMETRY_OTLP_TOKEN"));
+  return resolveTelemetryConfig(Option.getOrUndefined(url), Option.getOrUndefined(token));
+});
 
 const layerHttpPlatformNotSupported = Layer.succeed(HttpPlatform.HttpPlatform, {
   platform: "web",
@@ -129,7 +135,7 @@ export const layer = Api.make(
       placement: { region: "aws:us-west-2" },
       domain: relayPublicDomain,
       // Workers Logs bills per GB, and every request, queue batch, and DO call is
-      // an invocation log. Axiom traces carry the full detail; keep a sample for
+      // an invocation log. OTLP traces carry full detail; keep a sample for
       // crashes and limit errors that never export a span.
       observability: {
         enabled: true,
@@ -232,13 +238,7 @@ export const layer = Api.make(
       },
     });
     const mobileSourceMaps = yield* Cloudflare.R2.ReadBucket(observability.mobileSourceMaps);
-    const mobileTelemetryToken = yield* observability.mobileTelemetryIngestToken.token;
-    const mobileTracesUrl = yield* observability.traces.otelTracesEndpoint;
-    const mobileTracesDataset = yield* observability.traces.name;
-    const mobileLogsUrl = yield* observability.mobileLogs.otelLogsEndpoint;
-    const mobileLogsDataset = yield* observability.mobileLogs.name;
-    const mobileMetricsUrl = yield* observability.mobileMetrics.otelMetricsEndpoint;
-    const mobileMetricsDataset = yield* observability.mobileMetrics.name;
+    const telemetry = yield* readTelemetryConfig;
 
     const alchemyRuntimeContext: Alchemy.BaseRuntimeContext = yield* Cloudflare.Worker;
 
@@ -419,16 +419,22 @@ export const layer = Api.make(
         Layer.mergeAll(
           Layer.effect(
             MobileTelemetry.MobileTelemetrySettings,
-            Effect.gen(function* () {
-              return MobileTelemetry.MobileTelemetrySettings.of({
-                axiomToken: yield* mobileTelemetryToken,
-                destinations: {
-                  traces: { url: yield* mobileTracesUrl, dataset: yield* mobileTracesDataset },
-                  logs: { url: yield* mobileLogsUrl, dataset: yield* mobileLogsDataset },
-                  metrics: { url: yield* mobileMetricsUrl, dataset: yield* mobileMetricsDataset },
-                },
-              });
-            }),
+            Effect.succeed(
+              MobileTelemetry.MobileTelemetrySettings.of(
+                telemetry
+                  ? {
+                      collector: {
+                        otlpToken: telemetry.token,
+                        destinations: {
+                          traces: { url: `${telemetry.origin}/v1/traces` },
+                          logs: { url: `${telemetry.origin}/v1/logs` },
+                          metrics: { url: `${telemetry.origin}/v1/metrics` },
+                        },
+                      },
+                    }
+                  : {},
+              ),
+            ),
           ),
           Layer.succeed(MobileTelemetry.MobileTelemetryRateLimiter, {
             allow: allowWith(
@@ -597,12 +603,18 @@ export const layer = Api.make(
         ),
         Layer.provideMerge(
           Layer.unwrap(
-            Effect.map(RelayObservability, (observability) =>
-              Axiom.Telemetry({
-                serviceName: "t3code-relay",
-                token: observability.workerIngestToken,
-                traces: observability.traces,
-              }),
+            Effect.map(readTelemetryConfig, (telemetry) =>
+              telemetry
+                ? Alchemy.Telemetry.layerOtlp({
+                    traces: {
+                      url: `${telemetry.origin}/v1/traces`,
+                      headers: {
+                        Authorization: Redacted.make(`Bearer ${Redacted.value(telemetry.token)}`),
+                      },
+                    },
+                    serviceName: "t3code-relay",
+                  })
+                : Layer.empty,
             ),
           ),
         ),

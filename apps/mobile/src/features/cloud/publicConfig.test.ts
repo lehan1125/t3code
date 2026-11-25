@@ -27,9 +27,9 @@ describe("resolveCloudPublicConfig", () => {
       },
       observability: {
         tracesUrl: null,
-        tracesDataset: null,
         tracesToken: null,
       },
+      telemetry: { url: null, otlpToken: null },
     });
   });
 });

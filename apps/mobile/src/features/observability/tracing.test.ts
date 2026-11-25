@@ -22,7 +22,6 @@ const layerTracingTo = (fetchFn: typeof fetch) =>
   Tracing.layerFromConfig(
     {
       tracesUrl: "https://api.axiom.test/v1/traces",
-      tracesDataset: "mobile-traces",
       tracesToken: "public-ingest-token",
     },
     {

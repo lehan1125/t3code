@@ -30,7 +30,7 @@ import { decodeSourceMap, type CompactSourceMap } from "./sourceMap.ts";
 export const MOBILE_TELEMETRY_MAX_BODY_BYTES = 2 * 1024 * 1024;
 /** Per client IP. An app flushes a few batches per launch and background. */
 export const MOBILE_TELEMETRY_RATE_LIMIT = { limit: 120, periodSeconds: 60 } as const;
-/** Inside the relay's 9 s request deadline, so a slow Axiom answers as `upstream_timeout`. */
+/** Inside the relay's 9 s request deadline, so a slow collector answers as `upstream_timeout`. */
 const UPSTREAM_TIMEOUT = Duration.seconds(7);
 const MAX_UPSTREAM_RESPONSE_BYTES = 64 * 1024;
 /** A decoded production map is about 20 MB; two fit an isolate and cover iOS and Android. */
@@ -50,17 +50,17 @@ const decodeJson = Schema.decodeUnknownOption(UnknownFromJsonString);
 const encodeJson = Schema.encodeSync(UnknownFromJsonString);
 const parseJson = (text: string): unknown => Option.getOrUndefined(decodeJson(text));
 
-interface AxiomDestination {
-  /** Axiom's OTLP/HTTP endpoint for the signal, such as `.../v1/logs`. */
+interface OtlpDestination {
   readonly url: string;
-  readonly dataset: string;
 }
 
 export class MobileTelemetrySettings extends Context.Service<
   MobileTelemetrySettings,
   {
-    readonly axiomToken: Redacted.Redacted<string>;
-    readonly destinations: Readonly<Record<RelayMobileTelemetrySignal, AxiomDestination>>;
+    readonly collector?: {
+      readonly otlpToken: Redacted.Redacted<string>;
+      readonly destinations: Readonly<Record<RelayMobileTelemetrySignal, OtlpDestination>>;
+    };
   }
 >()("t3code-relay/mobileTelemetry/MobileTelemetry/MobileTelemetrySettings") {}
 
@@ -229,14 +229,14 @@ const make = Effect.gen(function* () {
   });
 
   const forward = Effect.fn("relay.mobile_telemetry.forward")(function* (
-    destination: AxiomDestination,
+    destination: OtlpDestination,
+    otlpToken: Redacted.Redacted<string>,
     body: Uint8Array,
   ) {
     const response = yield* httpClient.execute(
       HttpClientRequest.post(destination.url, {
         headers: {
-          authorization: `Bearer ${Redacted.value(settings.axiomToken)}`,
-          "x-axiom-dataset": destination.dataset,
+          authorization: `Bearer ${Redacted.value(otlpToken)}`,
         },
       }).pipe(HttpClientRequest.bodyUint8Array(body, "application/json")),
     );
@@ -258,6 +258,10 @@ const make = Effect.gen(function* () {
   ) {
     const outcome = (value: string) =>
       Effect.annotateCurrentSpan({ "relay.mobile_telemetry.outcome": value });
+    if (settings.collector === undefined) {
+      yield* outcome("collector_unconfigured");
+      return errorResponse(503, "collector_unconfigured");
+    }
     yield* Effect.annotateCurrentSpan({
       "relay.mobile_telemetry.project_id": projectId,
       "relay.mobile_telemetry.signal": signal,
@@ -295,7 +299,11 @@ const make = Effect.gen(function* () {
           )) ?? read.success)
         : read.success;
 
-    const upstream = yield* forward(settings.destinations[signal], body).pipe(Effect.result);
+    const upstream = yield* forward(
+      settings.collector.destinations[signal],
+      settings.collector.otlpToken,
+      body,
+    ).pipe(Effect.result);
     if (Result.isFailure(upstream)) {
       yield* outcome("upstream_unavailable");
       return errorResponse(502, "upstream_unavailable");
@@ -309,7 +317,7 @@ const make = Effect.gen(function* () {
     yield* Effect.annotateCurrentSpan({
       "relay.mobile_telemetry.upstream_status": response.status,
     });
-    // Observe's retry and partial-success handling reads only these from Axiom's answer.
+    // Observe's retry and partial-success handling reads only these response fields.
     const contentType = response.headers["content-type"];
     const retryAfter = response.headers["retry-after"];
     const headers = retryAfter === undefined ? undefined : { "retry-after": retryAfter };

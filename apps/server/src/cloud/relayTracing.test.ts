@@ -15,7 +15,7 @@ const tracesTo = (policy?: ManagedPolicyDocument) =>
     Effect.provide(
       relayLayer(
         { serviceName: "t3code-server", runtime: "node", client: "environment-server" },
-        { tracesUrl: "https://traces.example.com", tracesDataset: "relay", tracesToken: "token" },
+        { tracesUrl: "https://traces.example.com", tracesToken: "token" },
       ).pipe(Layer.provide(ManagedPolicy.layerTest(policy)), Layer.provide(FetchHttpClient.layer)),
     ),
     Effect.map(Option.isSome),
@@ -52,7 +52,7 @@ it.effect("relay tracing waits for the desktop shell's telemetry opt-out", () =>
     Layer.provide(
       relayLayer(
         { serviceName: "t3code-server", runtime: "node", client: "environment-server" },
-        { tracesUrl: "https://traces.example.com", tracesDataset: "relay", tracesToken: "token" },
+        { tracesUrl: "https://traces.example.com", tracesToken: "token" },
       ),
     ),
     Layer.provide(ManagedPolicy.layerTest()),

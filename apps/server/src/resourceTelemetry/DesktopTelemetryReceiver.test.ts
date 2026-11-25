@@ -100,7 +100,12 @@ NodeAssert.deepEqual(fingerprints(NodeTls.getCACertificates("default")), expecte
         type: "shellEnvironment",
         platform: "darwin",
         discovered: true,
-        environment: { NODE_EXTRA_CA_CERTS: certificatePath },
+        environment: {
+          NODE_EXTRA_CA_CERTS: certificatePath,
+          T3CODE_TELEMETRY_URL: "https://collector.example.test",
+          T3CODE_TELEMETRY_ANALYTICS_KEY: "private-shell-key",
+          T3CODE_TELEMETRY_OTLP_TOKEN: "public-write-token",
+        },
       } as const;
       const fingerprints = (certificates: ReadonlyArray<string>) =>
         certificates.map((pem) => new NodeCrypto.X509Certificate(pem).fingerprint256).sort();
@@ -112,6 +117,9 @@ NodeAssert.deepEqual(fingerprints(NodeTls.getCACertificates("default")), expecte
         fingerprints([baseline, extra, replacement]),
       );
       expect(environment.NODE_EXTRA_CA_CERTS).toBe(certificatePath);
+      expect(environment.T3CODE_TELEMETRY_URL).toBe("https://collector.example.test");
+      expect(environment.T3CODE_TELEMETRY_ANALYTICS_KEY).toBe("private-shell-key");
+      expect(environment.T3CODE_TELEMETRY_OTLP_TOKEN).toBe("public-write-token");
       expect(environment.T3CODE_DESKTOP_SHELL_DISCOVERY_PENDING).toBeUndefined();
 
       yield* fs.writeFileString(certificatePath, replacement);

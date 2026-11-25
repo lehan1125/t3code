@@ -337,12 +337,18 @@ describe("DesktopShellEnvironment", () => {
               JAVA_HOME: "/old/java",
               PNPM_HOME: "/old/pnpm",
               SSL_CERT_FILE: "/old/cert.pem",
+              T3CODE_TELEMETRY_URL: "https://collector.example.test",
+              T3CODE_TELEMETRY_ANALYTICS_KEY: "private-shell-key",
+              T3CODE_TELEMETRY_OTLP_TOKEN: "public-write-token",
             }),
         });
         const cachePath = `${stateDir}/shell-environment-cache.json`;
         const cached = yield* fs.readFileString(cachePath).pipe(Effect.flatMap(decodeCache));
         assert.equal(cached.environment.PATH, "/old/bin:/usr/bin");
         assert.equal(cached.environment.PNPM_HOME, "/old/pnpm");
+        assert.equal(cached.environment.T3CODE_TELEMETRY_URL, "https://collector.example.test");
+        assert.equal(cached.environment.T3CODE_TELEMETRY_OTLP_TOKEN, "public-write-token");
+        assert.notProperty(cached.environment, "T3CODE_TELEMETRY_ANALYTICS_KEY");
         assert.notProperty(cached.environment, "SSH_AUTH_SOCK");
         const started = yield* Deferred.make<void>();
         const release = yield* Deferred.make<void>();
@@ -465,6 +471,9 @@ describe("DesktopShellEnvironment", () => {
             SSL_CERT_FILE: "/cached/cert.pem",
             SSL_CERT_DIR: "/cached/certs",
             T3CODE_TELEMETRY_ENABLED: "false",
+            T3CODE_TELEMETRY_URL: "https://stale.example.test",
+            T3CODE_TELEMETRY_ANALYTICS_KEY: "stale-private-key",
+            T3CODE_TELEMETRY_OTLP_TOKEN: "stale-public-token",
             SSH_AUTH_SOCK: "/stale.sock",
             NODE_OPTIONS: "--bad",
           },
@@ -506,6 +515,9 @@ describe("DesktopShellEnvironment", () => {
         assert.equal(env.SSL_CERT_FILE, "");
         assert.equal(env.SSL_CERT_DIR, "/cached/certs");
         assert.equal(env.T3CODE_TELEMETRY_ENABLED, "false");
+        assert.equal(env.T3CODE_TELEMETRY_URL, "https://stale.example.test");
+        assert.equal(env.T3CODE_TELEMETRY_ANALYTICS_KEY, undefined);
+        assert.equal(env.T3CODE_TELEMETRY_OTLP_TOKEN, "stale-public-token");
         assert.equal(env.SSH_AUTH_SOCK, "/current.sock");
         assert.isUndefined(env.NODE_OPTIONS);
         assert.equal(yield* fs.readFileString(cachePath), contents);
@@ -996,6 +1008,9 @@ describe("DesktopShellEnvironment", () => {
                 PATH: "C:\\Profile\\Node;C:\\Windows\\System32",
                 FNM_DIR: "C:\\Users\\testuser\\AppData\\Roaming\\fnm",
                 FNM_MULTISHELL_PATH: "C:\\Users\\testuser\\AppData\\Local\\fnm_multishells\\123",
+                T3CODE_TELEMETRY_URL: "https://collector.example.test",
+                T3CODE_TELEMETRY_ANALYTICS_KEY: "profile-private-key",
+                T3CODE_TELEMETRY_OTLP_TOKEN: "profile-write-token",
               })
             : envOutput({ PATH: 'C:\\Custom\\Bin;C:";C:\\Windows\\System32' });
         },
@@ -1019,6 +1034,9 @@ describe("DesktopShellEnvironment", () => {
         ].join(";"),
       );
       assert.equal(env.FNM_DIR, "C:\\Users\\testuser\\AppData\\Roaming\\fnm");
+      assert.equal(env.T3CODE_TELEMETRY_URL, "https://collector.example.test");
+      assert.equal(env.T3CODE_TELEMETRY_ANALYTICS_KEY, "profile-private-key");
+      assert.equal(env.T3CODE_TELEMETRY_OTLP_TOKEN, "profile-write-token");
       assert.equal(
         env.FNM_MULTISHELL_PATH,
         "C:\\Users\\testuser\\AppData\\Local\\fnm_multishells\\123",

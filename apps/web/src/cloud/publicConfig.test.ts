@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { hasCloudPublicConfig } from "./publicConfig.ts";
+import {
+  hasCloudPublicConfig,
+  resolveCloudPublicConfig,
+  resolveRelayTracingConfig,
+} from "./publicConfig.ts";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -14,6 +18,23 @@ describe("hasCloudPublicConfig", () => {
     vi.stubEnv("VITE_T3CODE_RELAY_URL", "http://relay.example.test");
 
     expect(hasCloudPublicConfig()).toBe(false);
+  });
+
+  it("routes tracing only to the canonical collector and token", () => {
+    vi.stubEnv("VITE_T3CODE_TELEMETRY_URL", "https://collector.example.test");
+    vi.stubEnv("VITE_T3CODE_TELEMETRY_OTLP_TOKEN", "write-token");
+    vi.stubEnv("VITE_RELAY_OTLP_TRACES_URL", "https://old.example.test/v1/traces");
+    vi.stubEnv("VITE_RELAY_OTLP_TRACES_TOKEN", "old-token");
+    vi.stubEnv("VITE_RELAY_OTLP_TRACES_DATASET", "old-dataset");
+
+    expect(resolveRelayTracingConfig()).toEqual({
+      tracesUrl: "https://collector.example.test/v1/traces",
+      tracesToken: "write-token",
+    });
+    expect(resolveCloudPublicConfig().relayTracing).toEqual({
+      tracesUrl: "https://collector.example.test/v1/traces",
+      tracesToken: "write-token",
+    });
   });
 
   describe("browser origins", () => {

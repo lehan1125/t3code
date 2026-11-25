@@ -80,13 +80,28 @@ The relay deploys with the Alchemy CLI (`vp run --filter t3code-relay deploy` is
 in this directory):
 
 ```sh
-vp run --filter t3code-relay deploy
+ALCHEMY_TELEMETRY_DISABLED=1 vp run --filter t3code-relay deploy
 ```
 
 The stack provisions the Cloudflare Worker and queues, managed endpoint resources, database
 connectivity, and relay tracing resources. Copy [`infra/relay/.env.example`](./.env.example) to
 `infra/relay/.env` and fill in the deployment-specific values before deploying. Alchemy loads that
-file from the relay directory. Runtime secrets include Clerk, APNs, and optional FCM credentials. Set
+file from the relay directory. Set `T3CODE_TELEMETRY_URL` to the collector HTTPS origin and
+`T3CODE_TELEMETRY_OTLP_TOKEN` to a write token that can ingest traces, logs, and metrics. The relay
+exports its Effect spans to `/v1/traces`; its mobile Observe endpoint symbolicates JS exceptions
+when source maps are available, then forwards the received signal to `/v1/{traces,logs,metrics}`
+with bearer authentication. Direct mobile clients can also send to the collector's public
+`/v1/mobile/observe/<EAS id>/v1/{signal}` routes; that bypasses relay symbolication. Use HTTP only
+for localhost tests. CI reads `T3CODE_TELEMETRY_URL` as a repository Actions variable and
+`T3CODE_TELEMETRY_OTLP_TOKEN` as a repository Actions secret.
+
+Alchemy's existing relay monitors and health dashboards remain Axiom resources, so deployment
+still needs `AXIOM_ORG_ID` and `AXIOM_TOKEN` until those resources have an owned replacement. Relay
+request traces no longer use Axiom as an exporter. Cloudflare's sampled invocation logs remain in
+Workers Logs and are not sent to the collector. Existing Axiom views and monitors retain historical
+data but receive no new relay or mobile telemetry; use the collector for current telemetry.
+
+Runtime secrets include Clerk, APNs, and optional FCM credentials. Set
 `APNS_ENABLED=false` for an Android-only development deployment without Apple credentials. Production adopts
 the configured API and tunnel DNS zones as retained Cloudflare resources. Personal stages reference
 the production-owned zones.
@@ -97,8 +112,8 @@ PlanetScale branch and runtime role for local development, so deploy `prod` befo
 developer stages:
 
 ```sh
-vp run --filter t3code-relay deploy -- --stage prod
-vp run --filter t3code-relay deploy -- --env-file .env.local
+ALCHEMY_TELEMETRY_DISABLED=1 vp run --filter t3code-relay deploy -- --stage prod
+ALCHEMY_TELEMETRY_DISABLED=1 vp run --filter t3code-relay deploy -- --env-file .env.local
 ```
 
 Alchemy defaults personal deployments to the `dev_$USER` stage. Relay custom domains apply the same
@@ -110,10 +125,8 @@ DNS-safe sanitization as Alchemy physical resource names, so `prod` uses
 `<stage>-<digest>.<RELAY_TUNNEL_ZONE_NAME>`. `RELAY_DOMAIN` remains available as an explicit API
 domain override.
 
-The stack's `PublishClientConfig` action ([`src/clientConfig.ts`](./src/clientConfig.ts)) writes the
-deployed relay URL and tracing configuration into the repository-root `.env`, so subsequent source
-builds point at the relay that was just deployed without copying values manually. It runs only when
-one of those outputs changed, and `T3CODE_RELAY_CLIENT_CONFIG_ENV` redirects it to another file.
+After each deploy, the stack reconciles only `T3CODE_RELAY_URL` in the repository-root `.env` (or
+the path named by `T3CODE_RELAY_CLIENT_CONFIG_ENV`). It never writes the collector token there.
 
 ### Deployment CI
 
@@ -124,12 +137,15 @@ resolve their static public config from the same
 stage, and the cleanup workflow tears it down; see
 [`relay-preview.yml`](../../.github/workflows/relay-preview.yml). Developers can
 deploy personal non-production stages locally with any stage name other than `prod`.
+Relay deploy and destroy workflows set `ALCHEMY_TELEMETRY_DISABLED=1` to keep Alchemy CLI telemetry
+separate from the relay's explicitly configured OTLP export.
 
 The repository must define these Actions variables shared by relay deployments:
 
 - `CLOUDFLARE_ACCOUNT_ID`
 - `PLANETSCALE_ORGANIZATION`
 - `AXIOM_ORG_ID`
+- `T3CODE_TELEMETRY_URL`
 
 The repository must define these Actions secrets shared by relay deployments:
 
@@ -137,6 +153,7 @@ The repository must define these Actions secrets shared by relay deployments:
 - `PLANETSCALE_API_TOKEN_ID`
 - `PLANETSCALE_API_TOKEN`
 - `AXIOM_TOKEN`
+- `T3CODE_TELEMETRY_OTLP_TOKEN`
 
 The `production` GitHub environment must define these Actions variables:
 
@@ -168,7 +185,8 @@ The account-scoped repository credentials are consumed by Alchemy while provisio
 are not bound into the relay Worker. The production deployment uses an Axiom personal access token,
 so `AXIOM_ORG_ID` must accompany `AXIOM_TOKEN`. The release workflow reads the production relay's
 derived public URL and Clerk publishable key from the same environment for downstream desktop, CLI,
-and hosted web builds.
+and hosted web builds. The collector URL and write token are supplied separately for published
+client telemetry; the token is deliberately excluded from the relay `.env` reconciliation.
 
 See:
 

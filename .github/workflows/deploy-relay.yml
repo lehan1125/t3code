@@ -44,6 +44,7 @@ jobs:
       RELAY_LEGACY_TUNNEL_CLEANUP_MODE: ${{ vars.RELAY_LEGACY_TUNNEL_CLEANUP_MODE }}
       RELAY_ALERT_NOTIFIER_ID: ${{ vars.RELAY_ALERT_NOTIFIER_ID }}
       RELAY_WARNING_NOTIFIER_ID: ${{ vars.RELAY_WARNING_NOTIFIER_ID }}
+      T3CODE_TELEMETRY_URL: ${{ vars.T3CODE_TELEMETRY_URL }}
       CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
       CLERK_JWT_AUDIENCE: ${{ vars.CLERK_JWT_AUDIENCE }}
       APNS_ENVIRONMENT: ${{ vars.APNS_ENVIRONMENT }}
@@ -72,13 +73,12 @@ jobs:
       - name: Deploy production relay stage
         run: vp run --filter t3code-relay deploy --stage prod --yes --no-input ${{ inputs.force && '--force' || '' }}
         env:
-          # The PublishClientConfig action writes the client env here instead
-          # of the repo-root .env; nothing on the runner reads it.
           T3CODE_RELAY_CLIENT_CONFIG_ENV: ${{ runner.temp }}/relay-client-config.env
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           PLANETSCALE_API_TOKEN_ID: ${{ secrets.PLANETSCALE_API_TOKEN_ID }}
           PLANETSCALE_API_TOKEN: ${{ secrets.PLANETSCALE_API_TOKEN }}
           AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
+          T3CODE_TELEMETRY_OTLP_TOKEN: ${{ secrets.T3CODE_TELEMETRY_OTLP_TOKEN }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
           # Unset leaves the Clerk account-deletion webhook route off.
           CLERK_WEBHOOK_SIGNING_SECRET: ${{ secrets.CLERK_WEBHOOK_SIGNING_SECRET }}

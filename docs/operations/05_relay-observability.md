@@ -1,8 +1,11 @@
 # Relay observability
 
-The relay Alchemy stack (`infra/relay`) provisions stage-scoped Axiom datasets (`t3-code-relay-traces-<stage>`, `t3-code-mobile-logs-<stage>`, `t3-code-mobile-metrics-<stage>`), scoped write-only ingest tokens, the `t3-code-mobile-sourcemaps-<stage>` R2 bucket, and health dashboards (`t3-code-relay-health`, `t3-code-mobile-health`).
+The fork's relay exports runtime traces to the [self-hosted collector](./self-hosted-telemetry.md).
+The Alchemy stack still provisions the existing Axiom datasets and dashboards and the
+`t3-code-mobile-sourcemaps-<stage>` R2 bucket.
 
-Prefer Axiom dashboards and APL queries over tailing the Cloudflare Worker. Scripted queries use account-level `AXIOM_TOKEN` + `AXIOM_ORG_ID` (runtime ingest tokens are write-only). Effect HTTP attributes live under `attributes.http.*`, and relay custom annotations live under `attributes.custom`.
+The Axiom queries below apply to deployments that previously sent data there. For this
+fork's current traces, query the collector's SQLite database.
 
 ## Alerts
 
@@ -17,7 +20,10 @@ Threshold monitors in [`infra/relay/src/monitoring.ts`](../../infra/relay/src/mo
 
 ## Mobile crashes and errors
 
-The mobile app sends `expo-observe` telemetry to the relay (`/v1/mobile/observe`), which forwards logs, metrics, and spans to Axiom and symbolicates release Hermes JS stacks using source maps from R2 (`relay.symbolication.status` records the outcome).
+Current mobile builds send `expo-observe` logs, metrics, and spans directly to the collector.
+For older clients still using the relay's `/v1/mobile/observe` endpoint, the relay symbolicates
+Hermes JS stacks with source maps from R2 before forwarding the report to the configured
+collector. `relay.symbolication.status` records the outcome.
 
 - **Counting real native crashes:** Fatal JS errors also trigger a native abort; filter out `relay.crash.js_fatal` (and Android OS `SIGKILL`s, which indicate memory pressure/swiping) when counting native crashes:
 

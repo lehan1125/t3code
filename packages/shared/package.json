@@ -351,6 +351,10 @@
       "types": "./src/relayTracing.ts",
       "import": "./src/relayTracing.ts"
     },
+    "./telemetryEndpoint": {
+      "types": "./src/telemetryEndpoint.ts",
+      "import": "./src/telemetryEndpoint.ts"
+    },
     "./preview": {
       "types": "./src/preview.ts",
       "import": "./src/preview.ts"

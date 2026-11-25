@@ -1,10 +1,11 @@
 # Product usage data
 
-The T3 Code server sends product usage events to T3 Code's own endpoint at `ingest.t3.codes`,
-associated with a hashed random identifier for the installation. To count how many installations one person
+When the operator configures a collector URL and an analytics key, the T3 Code server sends
+product usage events to that collector. It associates events with a hashed random installation
+identifier. To count how many installations one person
 uses, the server also sends a hashed identifier for your T3 Connect account when you are signed in
-to one, and a random identifier for each device that connects. The endpoint keeps a copy of each
-event and forwards events to PostHog. Events include the provider, model, reasoning effort,
+to one, and a hashed random identifier for each device that connects. The self-hosted collector
+stores accepted events in SQLite. Events include the provider, model, reasoning effort,
 permission mode, turn and request results, duration, release channel, and token counts when
 available. Child-agent token counts are reported separately from the main agent's. Models from a
 provider's catalog are reported by name, even when a custom endpoint serves them. Any other
@@ -16,8 +17,8 @@ which is off unless you turn it on.
 
 ## Agent feedback
 
-Agent feedback lets agents tell the T3 team about T3 Code: a T3 tool or `t3` command that did not
-do what they expected, a confusing instruction, or a missing capability. Choose a mode in
+Agent feedback lets agents report a problem with T3 Code to the configured collector, such as a
+tool or `t3` command that did not work as expected. Choose a mode in
 **Agent feedback** in **Settings > Labs**:
 
 - **Off**, the default: agents do not see the feedback tools, and `t3 feedback` stops with a
@@ -66,10 +67,11 @@ exactly what each one holds.
 
 ## Relay connection diagnostics
 
-T3 Code sends relay connection traces to Axiom to diagnose T3 Connect connectivity. These are
+T3 Code sends relay connection traces to the configured collector to diagnose T3 Connect connectivity. These are
 separate from product events. Traces carry connection timings, request paths, environment and
 thread identifiers, and error types. They omit machine addresses, query strings, log lines,
-error messages, and stack frames.
+error messages, and stack frames. The collector address is separate from the T3 Connect relay
+address. A hosted relay can produce its own operational logs when it handles a connection.
 
 To disable product events and relay tracing from the server, set
 `T3CODE_TELEMETRY_ENABLED=false` in its environment before starting it. Relay tracing also stops
@@ -87,11 +89,10 @@ server's policy. The hosted web app sends relay traces when configured and has n
 
 ## Mobile app diagnostics
 
-When the iOS or Android app crashes or hits an error, it sends a report to T3 Code: the error
-message, the stack trace, the app version, and the device model and OS version. Each launch also
-sends startup timings, and every report carries a random ID for the install. Reports go through
-the T3 Connect relay to Axiom. They do not include your threads, prompts, or connection details,
-but an error message can quote a value the app was handling.
+When this build has a collector configured, the iOS or Android app reports crashes and errors
+with the error message, stack trace, app version, device model, and OS version. Each launch also
+sends startup timings, and every report carries a random install ID. The app sends these reports
+directly to the collector. An error message can quote a value the app was handling.
 
 To stop sending them, turn off **Send crash reports** in **Settings > About T3 Code > Diagnostics**.
 
@@ -129,3 +130,6 @@ settings. An overridden signal shows **Set by environment** and names the variab
 receivers that need authentication and `T3CODE_OTLP_PROTOCOL=http/protobuf` for receivers that do
 not accept JSON. An endpoint set with `OTEL_EXPORTER_OTLP_*` takes its headers and protocol from
 `OTEL_EXPORTER_OTLP_HEADERS` and `OTEL_EXPORTER_OTLP_PROTOCOL` instead.
+
+See [Self-hosted telemetry setup](../operations/self-hosted-telemetry.md) for the collector and
+fork build configuration.
