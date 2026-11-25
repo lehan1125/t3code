@@ -353,7 +353,8 @@
     },
     "./telemetryEndpoint": {
       "types": "./src/telemetryEndpoint.ts",
-      "import": "./src/telemetryEndpoint.ts"
+      "import": "./src/telemetryEndpoint.ts",
+      "require": "./src/telemetryEndpoint.ts"
     },
     "./preview": {
       "types": "./src/preview.ts",
