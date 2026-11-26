@@ -89,6 +89,18 @@ const respondWithStatus =
   (request) =>
     Effect.succeed(HttpClientResponse.fromWeb(request, new Response(null, { status })));
 
+type TelemetryEnv = {
+  readonly T3CODE_TELEMETRY_ENABLED?: boolean;
+  readonly T3CODE_TELEMETRY_ANALYTICS_KEY?: string;
+  readonly T3CODE_TELEMETRY_URL?: string;
+};
+
+const TEST_TELEMETRY_ENV: TelemetryEnv = {
+  T3CODE_TELEMETRY_ENABLED: true,
+  T3CODE_TELEMETRY_ANALYTICS_KEY: "phc_test_key",
+  T3CODE_TELEMETRY_URL: "http://localhost",
+};
+
 /**
  * Answers 503 for `minutes` after the first send, then 204. `answers` holds each
  * answer with its time in ms after the first send (the test clock runs on across tests).
@@ -117,7 +129,7 @@ const recordTwentyEvents = Effect.gen(function* () {
 const analyticsLayerWith = (
   client: HttpClient.HttpClient,
   policy?: ManagedPolicyDocument,
-  telemetryConfigured = true,
+  telemetryEnv: TelemetryEnv = TEST_TELEMETRY_ENV,
 ) =>
   AnalyticsService.layer.pipe(
     Layer.provideMerge(
@@ -125,15 +137,7 @@ const analyticsLayerWith = (
     ),
     Layer.provide(
       ConfigProvider.layer(
-        ConfigProvider.fromUnknown({
-          T3CODE_TELEMETRY_ENABLED: true,
-          ...(telemetryConfigured
-            ? {
-                T3CODE_TELEMETRY_ANALYTICS_KEY: "phc_test_key",
-                T3CODE_TELEMETRY_URL: "http://localhost",
-              }
-            : {}),
-        }),
+        ConfigProvider.fromUnknown(telemetryEnv),
       ),
     ),
     Layer.provide(
@@ -157,7 +161,7 @@ const sendFor = (
   {
     record = recordTwentyEvents,
     policy,
-    telemetryConfigured = true,
+    telemetryEnv,
   }: {
     readonly record?: Effect.Effect<
       void,
@@ -165,7 +169,7 @@ const sendFor = (
       AnalyticsService.AnalyticsService | Effect.Services<typeof getTelemetryIdentity>
     >;
     readonly policy?: ManagedPolicyDocument;
-    readonly telemetryConfigured?: boolean;
+    readonly telemetryEnv?: TelemetryEnv;
   } = {},
 ) =>
   Effect.gen(function* () {
@@ -181,7 +185,7 @@ const sendFor = (
         return yield* respond(request);
       }),
     );
-    const runtimeLayer = analyticsLayerWith(client, policy, telemetryConfigured);
+    const runtimeLayer = analyticsLayerWith(client, policy, telemetryEnv);
 
     yield* Effect.gen(function* () {
       yield* record;
@@ -210,6 +214,30 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("AnalyticsService
           yield* analytics.flush;
         }),
       }).pipe(Effect.provideService(HostProcess.Environment, env));
+      assert.deepEqual(
+        batches.flat().map((event) => event.event),
+        ["test.allowed"],
+      );
+    }),
+  );
+
+  it.effect("sends nothing while DO_NOT_TRACK is set", () =>
+    Effect.gen(function* () {
+      const env: NodeJS.ProcessEnv = { DO_NOT_TRACK: "1" };
+      const batches = yield* sendFor(
+        0,
+        respondWithStatus(204),
+        {
+          record: Effect.gen(function* () {
+            const analytics = yield* AnalyticsService.AnalyticsService;
+            yield* analytics.record("test.do-not-track");
+            yield* analytics.flush;
+            env.DO_NOT_TRACK = "0";
+            yield* analytics.record("test.allowed");
+            yield* analytics.flush;
+          }),
+        },
+      ).pipe(Effect.provideService(HostProcess.Environment, env));
       assert.deepEqual(
         batches.flat().map((event) => event.event),
         ["test.allowed"],
@@ -300,6 +328,23 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("AnalyticsService
         });
         assert.deepEqual(denied, []);
       }),
+  );
+
+  it.effect("sends nothing on a CI runner unless the environment opts in", () =>
+    Effect.gen(function* () {
+      const onCi = (enabled?: boolean) =>
+        sendFor(1, respondWithStatus(204), {
+          telemetryEnv: {
+            T3CODE_TELEMETRY_ANALYTICS_KEY: "phc_test_key",
+            T3CODE_TELEMETRY_URL: "http://localhost",
+            ...(enabled === undefined ? {} : { T3CODE_TELEMETRY_ENABLED: enabled }),
+          },
+        }).pipe(
+          Effect.provideService(HostProcess.Environment, { GITHUB_ACTIONS: "true" }),
+        );
+      assert.deepEqual(yield* onCi(), []);
+      assert.equal((yield* onCi(true)).length, 1);
+    }),
   );
 
   it.effect("drops a batch the endpoint rejects without sending it again", () =>
@@ -473,7 +518,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("AnalyticsService
 
   it.effect("collects and sends no analytics without an explicit collector and key", () =>
     Effect.gen(function* () {
-      const batches = yield* sendFor(1, respondWithStatus(204), { telemetryConfigured: false });
+      const batches = yield* sendFor(1, respondWithStatus(204), {
+        telemetryEnv: { T3CODE_TELEMETRY_ENABLED: true },
+      });
       assert.deepEqual(batches, []);
     }),
   );

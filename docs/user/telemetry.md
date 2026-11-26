@@ -1,4 +1,4 @@
-# Product usage data
+# Product usage data and diagnostics
 
 When the operator configures a collector URL and an analytics key, the T3 Code server sends
 product usage events to that collector. It associates events with a hashed random installation
@@ -74,15 +74,18 @@ error messages, and stack frames. The collector address is separate from the T3 
 address. A hosted relay can produce its own operational logs when it handles a connection.
 
 To disable product events and relay tracing from the server, set
-`T3CODE_TELEMETRY_ENABLED=false` in its environment before starting it. Relay tracing also stops
-when `T3CODE_OTEL_SDK_DISABLED` or `OTEL_SDK_DISABLED` turns OpenTelemetry export off.
+`T3CODE_TELEMETRY_ENABLED=false` or `DO_NOT_TRACK=1` in its environment before starting it.
+`DO_NOT_TRACK=1` takes precedence over explicit enablement. CI environments disable product events
+and relay tracing by default; set `T3CODE_TELEMETRY_ENABLED=true` to opt in. Relay tracing also
+stops when `T3CODE_OTEL_SDK_DISABLED` or `OTEL_SDK_DISABLED` turns OpenTelemetry export off.
 
 An administrator can turn product events and relay tracing off in the server and desktop app with
 a [managed policy](./managed-policy.md#other-capabilities). This does not control traces sent by
 the hosted web app or mobile clients.
 
-The desktop app reads `T3CODE_TELEMETRY_ENABLED` from your shell profile (for example `~/.zshrc`) on macOS and
-Linux, so export it there and restart the app. On Windows, set it as a user environment variable.
+The desktop app reads `T3CODE_TELEMETRY_ENABLED` and `DO_NOT_TRACK` from your shell profile (for
+example `~/.zshrc`) on macOS and Linux, so export the setting there and restart the app. On Windows,
+set it as a user environment variable.
 
 A browser opened from a T3 Code server sends relay traces only while connected and allowed by that
 server's policy. The hosted web app sends relay traces when configured and has no tracing toggle.
